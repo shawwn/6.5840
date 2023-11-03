@@ -244,22 +244,16 @@ func (rf *Raft) checkTerm(T int, where string) bool {
 	// If RPC request or response contains term T > currentTerm: set currentTerm = T, convert to follower (§5.1)
 	if T > rf.currentTerm {
 		rf.log("%s: T=%d > rf.currentTerm=%d; converting to follower", where, T, rf.currentTerm)
-		rf.currentTerm = T
-		rf.votedFor = -1
+		rf.setTerm(T)
 		rf.setState(RaftFollower)
-		rf.resetElectionTimeout()
 		return true
 	}
 	return false
 }
 
 func (rf *Raft) startLeaderElection() {
-	rf.resetElectionTimeout()
 	// increment current term
-	rf.currentTerm += 1
-	// vote for self
-	//rf.votedFor = rf.me
-	rf.votedFor = -1
+	rf.setTerm(rf.currentTerm + 1)
 	rf.log("Leader election start")
 	// send RequestVote RPCs to all other servers
 	votes := 0
@@ -369,6 +363,12 @@ func (rf *Raft) killed() bool {
 	return z == 1
 }
 
+func (rf *Raft) setTerm(term int) {
+	rf.currentTerm = term
+	rf.votedFor = -1
+	rf.resetElectionTimeout()
+}
+
 func (rf *Raft) setState(state int) {
 	if state == rf.state {
 		return
@@ -438,7 +438,6 @@ func stateName(state int) string {
 func (rf *Raft) log(format string, v ...any) {
 	msg := fmt.Sprintf(format, v...)
 	log.Printf("(%d/%d) %s term=%d: %s", rf.me, len(rf.peers), stateName(rf.state), rf.currentTerm, msg)
-
 }
 
 // the service or tester wants to create a Raft server. the ports
@@ -460,10 +459,8 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	// Your initialization code here (2A, 2B, 2C).
 
 	// 2A
-	rf.currentTerm = 0
-	rf.votedFor = -1
+	rf.setTerm(0)
 	rf.setState(RaftFollower) // servers begin as followers
-	rf.resetElectionTimeout()
 
 	// initialize from state persisted before a crash
 	rf.readPersist(persister.ReadRaftState())
